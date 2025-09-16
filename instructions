@@ -1,0 +1,324 @@
+# PlantMates — Product & Technical Planning Spec (iOS & Android)
+
+**Tagline:** Swap, sell, and discover plants with neighbors.  
+**Platforms:** iOS and Android (single codebase).  
+**Status:** MVP planning document for Codex-assisted development.
+
+---
+
+## 1) Problem & Vision
+**Problem:** Plant hobbyists rely on scattered Facebook groups and ad‑hoc DMs to swap/sell plants and cuttings. Discovery is messy, trust is low, and meetup logistics are manual.  
+**Vision:** A hyperlocal, community‑first marketplace that makes it effortless to **swap**, **sell**, and **give** plants, seeds, and cuttings — emphasizing trust, plant health, and low‑friction meetups.
+
+**Primary outcomes (MVP):**
+- Local discovery within X miles (user‑configurable radius).
+- Swipe-to-Swap and Map View to browse nearby listings quickly.
+- 1:1 secure chat for coordinating swaps/sales.
+- Simple trust signals (ratings + plant health feedback).
+- Listing creation in <60 seconds (guided form, camera roll access).
+
+---
+
+## 2) Target Users & Personas
+- **New Collector “Ari” (Age 24–35):** Wants affordable cuttings to grow a collection; needs confidence in plant health and easy meetups.
+- **Propagator “Sam” (Age 28–45):** Regularly has extra cuttings; wants quick swaps or small sales, minimal friction.
+- **Community Host “Rae” (Age 30–60):** Organizes local swap events; needs simple event listings and participant messaging.
+
+---
+
+## 3) Core Value Props
+- **Hyperlocal:** Nearby listings first; meet locally; reduce shipping/pest risks.
+- **Swap‑first:** Listings support swap, sale, or give‑away in one place.
+- **Trust signals:** Health feedback, reliability ratings, propagation notes.
+- **Fast browse:** Tinder‑style swipe + map pins with powerful filters.
+
+---
+
+## 4) Feature List (MVP)
+1. **Onboarding & Location**
+   - Email/Apple/Google sign‑in
+   - Zip/GPS-based region + adjustable radius
+   - Basic profile (bio, favorite plants, badges)
+2. **Browse & Discovery**
+   - **Swipe to Swap:** Card stack of nearby listings; like/pass
+   - **Map View:** Clustered pins; filters (cuttings, rare, freebies, mature plant, seeds)
+   - Sort: distance, newly listed, price (asc/desc)
+3. **Listing Creation**
+   - Photos (camera/gallery), title, species, size, condition, propagation notes
+   - Transaction types: swap / sale / free (can enable multiple)
+   - Price (if sale), preferred trades, pickup area, schedule hints
+4. **In‑App Messaging**
+   - 1:1 chat after like/match or via “message seller”
+   - Quick templates (pickup windows, safety tips, bundle offers)
+5. **Trust & Safety**
+   - Ratings after completed swap/sale (reliability, accuracy, health)
+   - Report listing/user (spam, pest issue, no‑show, harassment)
+   - Basic block/mute
+6. **Notifications**
+   - Matches, new messages, wish‑list hits, nearby “rare” listings
+7. **Monetization (MVP)**
+   - **Free** to use; **Premium** (optional): featured listings, extra photos, lower sales fee
+   - Affiliate links (soil, pots, fertilizer), toggled off in MVP if needed
+8. **Admin Console (Phase 1.5)**
+   - Basic dashboard: user search, listing moderation queue, reports
+
+---
+
+## 5) Non‑Goals (MVP)
+- No payments escrow at launch (use cash/Venmo/PayPal handled between users).
+- No shipping logistics or labels (local focus first).
+- No public user‑to‑user ratings comments (numeric/star ratings only).
+
+---
+
+## 6) Competitive Edge
+- **Swap bias** (not just sales).  
+- **Plant‑health context** (propagation notes, post‑swap health check‑ins).  
+- **Hyperlocal map + swipe** dual UX.  
+- **Simple & kind** community rules + fast moderation.
+
+---
+
+## 7) Platforms & Stack
+- **Mobile app:** React Native (Expo) **or** Flutter (choose one); supports iOS & Android.
+- **Backend:** Node.js (NestJS) **or** Python (FastAPI).  
+- **Data:** PostgreSQL (primary), Redis (caching, rate‑limits), S3-compatible object storage for images.  
+- **Auth:** Firebase Auth or Cognito (Apple/Google sign‑in), JWT to backend.
+- **Notifications:** Firebase Cloud Messaging (Android) & APNs (iOS) via Firebase.  
+- **Maps:** Mapbox or Google Maps SDK.  
+- **Image Handling:** Upload → serverless resize → CDN.  
+- **Hosting:** Render/Fly.io/Heroku‑equivalent + CloudFront/Cloudflare CDN.  
+- **Analytics:** PostHog or Firebase Analytics.  
+- **Crash Reporting:** Sentry.
+
+**Note:** Keep a single shared API for both platforms.
+
+---
+
+## 8) Architecture Overview
+```
+[Mobile App (RN/Flutter)]
+     | GraphQL/REST over HTTPS (JWT)
+[API Gateway / Load Balancer]
+     |→ [Backend Service (NestJS/FastAPI)]
+           |→ PostgreSQL (RDS)
+           |→ Redis (cache/session/rate-limit)
+           |→ Object Storage (images)
+           |→ Notification Service (FCM/APNs)
+           |→ Admin Console (RBAC)
+```
+
+**Security:** HTTPS/TLS, JWT expiry/refresh, per‑route rate limits, image upload signed URLs, input sanitization.  
+**Privacy:** Location stored as coarse geohash + city/zip (not exact address).
+
+---
+
+## 9) Data Model (MVP)
+
+### `users`
+- `id` (uuid, pk)
+- `auth_provider` (enum: email, google, apple)
+- `email` (uniq), `display_name`, `bio`, `avatar_url`
+- `created_at`, `updated_at`
+- `location_geohash`, `city`, `state`, `country`
+- `rating_reliability` (float avg), `rating_health` (float avg)
+- `blocked_user_ids` (array)
+
+### `plants`
+- `id`, `common_name`, `scientific_name`, `care_light` (enum), `care_water` (enum), `care_notes`
+
+### `listings`
+- `id`, `owner_id (fk users)`, `plant_id (fk plants | nullable)`
+- `title`, `description`, `transaction_types` (array enum: swap, sale, free)
+- `price_cents` (nullable), `is_active` (bool), `quantity` (int)
+- `condition` (enum: cutting, seed, juvenile, mature)
+- `propagation_notes`
+- `photos` (array of urls), `thumbnail_url`
+- `geohash`, `city`, `state`, `radius_km`
+- `created_at`, `expires_at` (nullable), `updated_at`
+
+### `matches`
+- `id`, `listing_id`, `liker_id`, `status` (enum: pending, matched, rejected)
+- `created_at`
+
+### `messages`
+- `id`, `thread_id`, `sender_id`, `recipient_id`, `body`, `attachments`, `created_at`, `read_at`
+
+### `ratings`
+- `id`, `rater_id`, `ratee_id`, `swap_id`, `reliability` (1–5), `health` (1–5), `notes`, `created_at`
+
+### `swaps`
+- `id`, `listing_id`, `buyer_id` (nullable for swap), `seller_id`, `type` (swap|sale|free)
+- `status` (proposed, agreed, completed, canceled, no_show)
+- `scheduled_at` (nullable), `location_hint`, `created_at`
+
+### `reports`
+- `id`, `reporter_id`, `reported_user_id` (nullable), `listing_id` (nullable)
+- `type` (spam, pest, harassment, counterfeit, other), `notes`, `created_at`, `status`
+
+### `wishlists`
+- `id`, `user_id`, `criteria` (JSON: species, rarity, type, distance_km), `created_at`
+
+### `notifications`
+- `id`, `user_id`, `type`, `payload(json)`, `delivered_at`, `read_at`
+
+---
+
+## 10) Key Flows (Happy Paths)
+
+### A) Onboarding
+1. Install → Allow location (coarse) → Sign in (Apple/Google/Email)  
+2. Set radius (default 10 mi) → Pick interests (species/tags) → Done
+
+### B) Create a Listing
+1. Tap “+ List” → Add photos → Title, type (swap/sell/free), price (optional)
+2. Select plant (autocomplete or free text) → condition → notes
+3. Confirm geofence area → Publish
+
+### C) Browse & Match
+1. Swipe screen: like or pass cards → instant “Match!” when a seller accepts or using “Message Seller” on detail.  
+2. Map screen: filter → tap pin → view listing → like/message.
+
+### D) Chat & Schedule
+1. In chat, quick replies: “Available today 5–7pm?” “Meet at library?”  
+2. Mark as **Agreed** → after meetup, mark **Completed** → trigger ratings.
+
+---
+
+## 11) API Surface (MVP, REST examples)
+
+```
+POST   /auth/signup
+POST   /auth/login
+GET    /users/me
+PATCH  /users/me
+
+GET    /plants/search?q=monstera
+POST   /plants        (admin only for canonical list; free text stored in listings otherwise)
+
+POST   /listings
+GET    /listings?lat=..&lng=..&radius_km=..&filters=..&sort=..
+GET    /listings/{id}
+PATCH  /listings/{id}
+DELETE /listings/{id}
+
+POST   /matches/{listingId}/like
+POST   /matches/{listingId}/pass
+GET    /matches
+
+POST   /threads (or auto-create on message)
+POST   /messages
+GET    /threads
+GET    /messages?thread_id=...
+
+POST   /swaps/{id}/status (agreed | completed | canceled | no_show)
+POST   /ratings
+
+POST   /reports
+GET    /notifications
+```
+
+**Auth:** Bearer JWT.  
+**Rate limiting:** per-IP + per-user (e.g., 60 req/min).
+
+---
+
+## 12) Trust & Safety
+- **Ratings after completion** required to keep the community healthy.
+- **Report & Block** at user and listing level.
+- **Image moderation** pipeline (NSFW, QR code spam, text filters).
+- **Anti‑scam tips** injected in chat (no deposits, meet in public, etc.).
+- **Location privacy:** Only show coarse area; never show exact home address.
+
+---
+
+## 13) Content & UX Details
+- **Card Layout (Swipe):** Large photo → title → badges (swap/sale/free, cutting/mature) → distance → quick actions (like, save, message).  
+- **Map View:** Cluster markers; bottom sheet w/ listing details & CTA.  
+- **Filters:** Type (cutting/seed/mature), transaction (swap/sale/free), price range, distance, rarity tags.  
+- **Accessibility:** Dynamic type, voiceover labels, sufficient contrast, tap targets ≥ 44pt.
+
+---
+
+## 14) Analytics & KPIs
+- D1/D7 retention, sessions/user/day
+- Listing creation success rate
+- Match rate (likes → chats)
+- Swap/sale completion rate
+- Report rate (by type)
+- Ratings distribution
+
+---
+
+## 15) Monetization (Post‑MVP options)
+- **Premium ($/mo):** more photos, featured placement, advanced filters, lower sales fee.  
+- **Promoted listings:** pay to boost (local only).  
+- **Affiliate links:** optional care kits/supplies (opt‑out in settings).
+
+---
+
+## 16) Roadmap
+**MVP (6–8 weeks):** Onboarding, listing, browse (swipe+map), chat, ratings, basic reports, push notifications, admin moderation.  
+**Phase 1.5:** Wishlists/alerts, event listings, basic admin dashboard, simple badges.  
+**Phase 2:** Payments escrow & seller fees, shipping option (opt‑in), richer reputation (propagation success).
+
+---
+
+## 17) Testing Strategy
+- **Unit:** model + util libs (validation, geohash, filters).  
+- **Integration:** listing CRUD, search queries, auth flows.  
+- **E2E:** Detox/Flutter Driver for onboarding → list → match → chat → complete → rate.  
+- **Beta:** TestFlight (iOS) + Internal App Sharing (Android).
+
+---
+
+## 18) Release & Ops
+- **CI/CD:** GitHub Actions → build + unit tests → deploy to staging → manual QA → stores.  
+- **Feature flags:** Gradual rollout for swipe vs map, premium promo.  
+- **Support:** In‑app “Report a problem,” FAQ, community guidelines.
+
+---
+
+## 19) Legal & Compliance
+- **ToS/Privacy:** clear about location, photo storage, messaging retention.  
+- **COPPA:** 13+ only.  
+- **GDPR/CCPA:** data export/delete endpoints.  
+- **Trademark:** “PlantMates” availability to be verified; file early if pursuing brand protection.
+
+---
+
+## 20) Acceptance Criteria (MVP)
+- A new user can: sign in → set location → view listings in radius → like/pass → view map → message a seller → agree on a swap → mark completed → leave ratings.  
+- Listing creation ≤ 60s with at least one photo.  
+- Push notifications delivered for matches & messages.  
+- Reports flow reaches admin queue.  
+- App ships to **iOS and Android** from a single codebase.
+
+---
+
+## 21) Open Questions
+- Distance defaults (10 mi?) and max radius (50 mi?)  
+- Allow messaging without match? (Yes, via “message seller”)  
+- Public profile visibility vs. privacy defaults  
+- Built‑in payment flows vs. local-only for first 3–6 months
+
+---
+
+## 22) Wireframe Notes (text)
+- **Home (Tabs):** *Swipe*, *Map*, *Messages*, *Profile*  
+- **Swipe Card:** photo carousel, title, tags (swap/sale/free), distance, heart (like), X (pass), bookmark, message  
+- **Map Sheet:** listing thumbnail, quick filter chips, “Open details”  
+- **Create Listing:** photo picker → details → preview → publish  
+- **Chat:** bubble view, canned replies, report/block in overflow menu  
+- **Rate Swap:** 2 sliders (reliability, health), optional note, submit
+
+---
+
+## 23) Sample Entities (Seed Data)
+- **Monstera deliciosa — cutting** (swap/free)  
+- **Pothos Marble Queen — juvenile** (swap/sale $5)  
+- **Spider Plant — mature** (free, limited pickups, weekend only)
+
+---
+
+*End of spec.*
